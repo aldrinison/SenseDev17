@@ -22,3 +22,7 @@ None.
 
 
 $Id: README.txt,v 1.5 2007-07-10 20:01:58 klueska Exp $
+
+Commands:
+make telosb install,710 bsl,/dev/ttyUSB0
+# 710 corresponds to the address you set. 1 by default if not specified

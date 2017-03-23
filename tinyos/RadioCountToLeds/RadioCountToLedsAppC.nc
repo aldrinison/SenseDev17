@@ -58,15 +58,20 @@
 configuration RadioCountToLedsAppC {}
 implementation {
   components MainC, RadioCountToLedsC as App, LedsC;
+  components new TimerMilliC();
+
+  // for radio communication
   components new AMSenderC(AM_RADIO_COUNT_MSG);
   components new AMReceiverC(AM_RADIO_COUNT_MSG);
-  components new TimerMilliC();
   components ActiveMessageC;
 
+  // for setting and getting transmission power
   components CC2420PacketC;
   
+  // for serial communication with 
   components PrintfC;
   components SerialStartC;
+  components ActiveMessageAddressC;
 
   App.Boot -> MainC.Boot;
   
@@ -77,6 +82,8 @@ implementation {
   App.MilliTimer -> TimerMilliC;
   App.Packet -> AMSenderC;
   App.CC2420Packet -> CC2420PacketC;
+  App.AMAdd -> ActiveMessageAddressC;
+  App.AMPacket -> AMSenderC;
 }
 
 

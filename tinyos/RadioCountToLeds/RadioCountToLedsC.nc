@@ -60,12 +60,15 @@ module RadioCountToLedsC @safe() {
   uses {
     interface Leds;
     interface Boot;
+    interface Timer<TMilli> as MilliTimer;
+
     interface Receive;
     interface AMSend;
-    interface Timer<TMilli> as MilliTimer;
     interface SplitControl as AMControl;
     interface Packet;
     interface CC2420Packet;
+    interface ActiveMessageAddress as AMAdd;
+    interface AMPacket;
   }
 }
 implementation {
@@ -75,16 +78,19 @@ implementation {
   uint8_t int_holder;
 
   bool locked;
+  bool isforme;
   uint16_t counter = 0;
   
+  am_addr_t addr;
+
   event void Boot.booted() {
-    call CC2420Packet.setPower(&packet, 3);
+    call CC2420Packet.setPower(&packet, 31);
     call AMControl.start();
   }
 
   event void AMControl.startDone(error_t err) {
     if (err == SUCCESS) {
-      call MilliTimer.startPeriodic(250);
+      call MilliTimer.startPeriodic(750);
     }
     else {
       call AMControl.start();
@@ -102,13 +108,18 @@ implementation {
       return;
     }
     else {
-      radio_count_msg_t* rcm = (radio_count_msg_t*)call Packet.getPayload(&packet, sizeof(radio_count_msg_t));
-      if (rcm == NULL) {
+      //radio_count_msg_t* rcm = (radio_count_msg_t*)call Packet.getPayload(&packet, sizeof(radio_count_msg_t));
+      uint16_t* intpayload = (uint16_t*) call Packet.getPayload(&packet, sizeof(uint16_t));
+      //if (rcm == NULL) {
+      if (intpayload == NULL){
 	return;
       }
 
-      rcm->counter = counter;
-      if (call AMSend.send(AM_BROADCAST_ADDR, &packet, sizeof(radio_count_msg_t)) == SUCCESS) {
+      //rcm->counter = counter;
+      *intpayload = 439;
+      //AM_BROADCAST_ADDR for broadcasting
+      //if (call AMSend.send(801, &packet, sizeof(radio_count_msg_t)) == SUCCESS) {
+      if (call AMSend.send(801, &packet, sizeof(uint16_t)) == SUCCESS){
 	dbg("RadioCountToLedsC", "RadioCountToLedsC: packet sent.\n", counter);	
 	locked = TRUE;
       }
@@ -119,32 +130,41 @@ implementation {
 				   void* payload, uint8_t len) {
     dbg("RadioCountToLedsC", "Received packet of length %hhu.\n", len);
 
-    int_holder = call CC2420Packet.getRssi(&packet);
-    printf("Message received at RSSI of %d\n", int_holder);
+    isforme = call AMPacket.isForMe(bufPtr);
+    printf("isforme = %d\n", isforme);
     printfflush();
-    if (len != sizeof(radio_count_msg_t)) {return bufPtr;}
-    else {
-      radio_count_msg_t* rcm = (radio_count_msg_t*)payload;
-      if (rcm->counter & 0x1) {
-	call Leds.led0On();
-      }
+    if (isforme){
+      int_holder = call CC2420Packet.getRssi(&packet);
+      printf("Message received at RSSI of %d\n", int_holder);
+      printfflush();
+      if (len != sizeof(radio_count_msg_t)) {return bufPtr;}
       else {
-	call Leds.led0Off();
+        radio_count_msg_t* rcm = (radio_count_msg_t*)payload;
+               
+
+        if (rcm->counter & 0x1) {
+	  call Leds.led0On();
+        }
+        else {
+	  call Leds.led0Off();
+        }
+        if (rcm->counter & 0x2) {
+	  call Leds.led1On();
+        }
+        else {
+	  call Leds.led1Off();
+        }
+        if (rcm->counter & 0x4) {
+	  call Leds.led2On();
+        }
+        else {
+	  call Leds.led2Off();
+        }
+        return bufPtr;
       }
-      if (rcm->counter & 0x2) {
-	call Leds.led1On();
-      }
-      else {
-	call Leds.led1Off();
-      }
-      if (rcm->counter & 0x4) {
-	call Leds.led2On();
-      }
-      else {
-	call Leds.led2Off();
-      }
-      return bufPtr;
     }
+    else
+      return bufPtr;
   }
 
   event void AMSend.sendDone(message_t* bufPtr, error_t error) {
@@ -152,9 +172,14 @@ implementation {
       locked = FALSE;
       int_holder = call CC2420Packet.getPower(&packet);
       printf("Sending done at %d\n", int_holder);
-      
+      addr = call AMAdd.amAddress();
+      printf("My address is %u\n", (uint16_t*) addr);
       printfflush();
     }
+  }
+
+  async event void AMAdd.changed(){
+    //do nothing. why is this needed?
   }
 
 }
